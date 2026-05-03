@@ -152,7 +152,7 @@ export default function SearchScreen() {
     retry: 1,
   });
 
-  const EXAMPLE_VERBS = ["كَتَبَ", "قَرَأَ", "ذَهَبَ", "آمَنَ", "عَلِمَ", "نَصَرَ", "سَأَلَ", "فَعَلَ"];
+  const EXAMPLE_VERBS = ["كَتَبَ", "قَالَ", "ذَهَبَ", "آمَنَ", "عَلِمَ", "نَصَرَ", "هَدَى", "صَبَرَ", "دَعَا", "سَمِعَ"];
 
   const handleSearch = () => {
     if (query.trim().length > 1) setActiveQuery(query.trim());

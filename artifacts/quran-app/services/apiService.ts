@@ -198,17 +198,27 @@ export async function fetchTafseerFromApi(
 }
 
 export async function fetchTasreef(verb: string): Promise<TasreefResult> {
-  const res = await fetch(`${getApiBase()}/tasreef`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ verb: verb.trim() }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(err.error ?? `Tasreef failed: ${res.status}`);
+  const cacheKey = `tasreef/${verb.trim().replace(/[\u064B-\u065F\u0670\u0640]/g, '')}`;
+  try {
+    const res = await fetch(`${getApiBase()}/tasreef`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verb: verb.trim() }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      throw new Error(err.error ?? `Tasreef failed: ${res.status}`);
+    }
+    const data: TasreefResult = await res.json();
+    if ((data as any).error) throw new Error((data as any).error);
+    markNetworkSuccess();
+    void setCache(cacheKey, data, TTL.wordLookup);
+    return data;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<TasreefResult>(cacheKey);
+    if (cached) return cached;
+    throw err;
   }
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
 }

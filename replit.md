@@ -41,9 +41,9 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Analysis Hub** — 4-tab modal per verse: Words | Grammar (إعراب) | Morphology (صرف) | Tafseer (تفسير)
 - **Tafseer** — 3 editions: Maududi (EN), Ibn Kathir (EN), Maariful Quran (UR)
 - **Grammar (إعراب)** — fetched from tafsir.app (3 classical sources)
-- **Morphology (صرف)** — AI-powered via Groq (requires GROQ_API_KEY)
+- **Morphology (صرف)** — word-by-word from quran.com API + shared classical dictionary (`lib/classicalDict.ts`)
 - **Search** — 4 tabs: Keyword | Root | Themes | Tasreef (verb conjugation)
-- **Tasreef** — full verb conjugation tables via Groq AI (requires GROQ_API_KEY)
+- **Tasreef** — OFFLINE: 24 pre-built Quranic verb conjugation tables (all major Form I patterns + hollow/defective/Form IV); GROQ fallback for other verbs if key configured; results cached in AsyncStorage
 - **Audio recitation** — play/pause/next/prev per ayah
 - **Bookmarks & Notes** — saved with AsyncStorage
 - **Multilingual** — English + Urdu (RTL supported)
@@ -56,7 +56,8 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 | `/api/grammar` | GET | إعراب from tafsir.app — no API key needed |
 | `/api/word-lookup` | POST | Classical dictionary + corpus.quran.com fallback |
 | `/api/tafseer/:surah/:edition` | GET | Proxy to quran.com (editions: en.kathir, ur.maarifulquran) |
-| `/api/tasreef` | POST | Verb conjugation via Groq AI — requires GROQ_API_KEY |
+| `/api/tasreef` | POST | Verb conjugation — offline static dataset first, GROQ fallback (optional) |
+| `/api/tasreef/list` | GET | List all 24 offline-available verbs |
 | `/api/analysis/stream` | POST | Morphology/word analysis via Groq SSE — requires GROQ_API_KEY |
 
 ### Environment Variables Needed
