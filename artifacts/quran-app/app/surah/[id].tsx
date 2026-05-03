@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import React, { useCallback, useRef, useState } from "react";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import {
   ActivityIndicator,
   FlatList,
@@ -236,6 +237,7 @@ export default function SurahScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <FlatList
         data={data.ayahs}
         keyExtractor={(item) => String(item.numberInSurah)}

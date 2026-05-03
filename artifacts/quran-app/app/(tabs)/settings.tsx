@@ -1,6 +1,7 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,8 @@ import {
 } from "react-native";
 import { useSettings } from "@/context/SettingsContext";
 import { useColors } from "@/hooks/useColors";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { clearAllCache, getCacheStats } from "@/services/offlineCache";
 import type { FontSize, Language } from "@/types";
 
 const RECITERS = [
@@ -76,6 +79,34 @@ function OptionChips<T extends string>({
 export default function SettingsScreen() {
   const colors = useColors();
   const { settings, setLanguage, setFontSize, toggleTransliteration, setReciter } = useSettings();
+  const { isOnline } = useNetworkStatus();
+  const [cacheStats, setCacheStats] = useState<{ count: number; sizeKb: number } | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    getCacheStats().then(setCacheStats);
+  }, []);
+
+  const handleClearCache = () => {
+    Alert.alert(
+      "Clear Offline Cache",
+      "This will remove all cached Quran data. Content will be re-downloaded next time you open a surah.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear Cache",
+          style: "destructive",
+          onPress: async () => {
+            setClearing(true);
+            await clearAllCache();
+            const stats = await getCacheStats();
+            setCacheStats(stats);
+            setClearing(false);
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <ScrollView
@@ -140,6 +171,53 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SectionHeader title="OFFLINE & CACHE" />
+
+        <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={styles.rowLeft}>
+            <Ionicons name={isOnline ? "wifi-outline" : "wifi-outline"} size={18} color={isOnline ? "#16a34a" : "#dc2626"} />
+            <Text style={[styles.rowLabel, { color: colors.foreground }]}>Network Status</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: isOnline ? "#dcfce7" : "#fee2e2" }]}>
+            <Text style={[styles.statusText, { color: isOnline ? "#16a34a" : "#dc2626" }]}>
+              {isOnline ? "Online" : "Offline"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={styles.rowLeft}>
+            <Ionicons name="archive-outline" size={18} color={colors.primary} />
+            <View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Cached Content</Text>
+              {cacheStats && (
+                <Text style={[styles.cacheDetail, { color: colors.mutedForeground }]}>
+                  {cacheStats.count} item{cacheStats.count !== 1 ? "s" : ""} · {cacheStats.sizeKb} KB
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.row, { borderBottomColor: "transparent" }]}>
+          <View style={styles.rowLeft}>
+            <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+            <Text style={[styles.rowLabel, { color: colors.foreground }]}>Auto-cache</Text>
+          </View>
+          <Text style={[styles.cacheDetail, { color: colors.mutedForeground }]}>Always on</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.clearBtn, { borderColor: "#dc2626", opacity: clearing || (cacheStats?.count === 0) ? 0.4 : 1 }]}
+          onPress={handleClearCache}
+          disabled={clearing || cacheStats?.count === 0}
+        >
+          <Ionicons name="trash-outline" size={16} color="#dc2626" />
+          <Text style={styles.clearBtnText}>{clearing ? "Clearing..." : "Clear Cache"}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SectionHeader title="ABOUT" />
         <View style={styles.aboutSection}>
           <Text style={[styles.aboutTitle, { color: colors.foreground }]}>Quranic Linguistic Explorer</Text>
@@ -158,6 +236,11 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 16 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  cacheDetail: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  clearBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginVertical: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  clearBtnText: { color: "#dc2626", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, overflow: "hidden" },
   sectionHeader: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 1, paddingTop: 16, paddingBottom: 8 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, borderBottomWidth: 1 },

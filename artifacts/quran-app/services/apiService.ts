@@ -1,3 +1,6 @@
+import { getCache, setCache, TTL } from "./offlineCache";
+import { markNetworkError, markNetworkSuccess } from "@/hooks/useNetworkStatus";
+
 const getApiBase = (): string => {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   return domain ? `https://${domain}/api` : "http://localhost:80/api";
@@ -81,23 +84,47 @@ function stripHtml(html: string): string {
 }
 
 export async function fetchGrammar(surah: number, ayah: number): Promise<GrammarResult> {
-  const res = await fetch(`${getApiBase()}/grammar?surah=${surah}&ayah=${ayah}`);
-  if (!res.ok) throw new Error(`Grammar fetch failed: ${res.status}`);
-  const data = await res.json();
-  if (data.data) data.data = stripHtml(data.data);
-  return data;
+  const cacheKey = `grammar/${surah}/${ayah}`;
+  try {
+    const res = await fetch(`${getApiBase()}/grammar?surah=${surah}&ayah=${ayah}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`Grammar fetch failed: ${res.status}`);
+    const data: GrammarResult = await res.json();
+    if (data.data) data.data = stripHtml(data.data);
+    markNetworkSuccess();
+    if (data.data) void setCache(cacheKey, data, TTL.grammar);
+    return data;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<GrammarResult>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 }
 
 export async function fetchWordLookup(
   word: string, surah: number, ayah: number, wordIndex: number
 ): Promise<DictionaryResult> {
-  const res = await fetch(`${getApiBase()}/word-lookup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ word, surah, ayah, wordIndex }),
-  });
-  if (!res.ok) throw new Error(`Dictionary lookup failed: ${res.status}`);
-  return res.json();
+  const cacheKey = `word/${surah}/${ayah}/${wordIndex}`;
+  try {
+    const res = await fetch(`${getApiBase()}/word-lookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word, surah, ayah, wordIndex }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`Dictionary lookup failed: ${res.status}`);
+    const data: DictionaryResult = await res.json();
+    markNetworkSuccess();
+    if (data.root || data.meaning) void setCache(cacheKey, data, TTL.wordLookup);
+    return data;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<DictionaryResult>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 }
 
 async function parseSSEResponse(res: Response): Promise<string> {
@@ -108,7 +135,10 @@ async function parseSSEResponse(res: Response): Promise<string> {
       try {
         const data = JSON.parse(line.slice(6));
         if (data.text) fullText += data.text;
-      } catch {}
+        if (data.error) throw new Error(data.error);
+      } catch (e: any) {
+        if (e.message && !e.message.startsWith("JSON")) throw e;
+      }
     }
   }
   return fullText || text;
@@ -121,18 +151,35 @@ export async function fetchMorphology(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type: "morphology", ayahText, surahName, ayahNumber }),
+    signal: AbortSignal.timeout(30000),
   });
-  if (!res.ok) throw new Error(`Morphology failed: ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error ?? `Morphology failed: ${res.status}`);
+  }
   return parseSSEResponse(res);
 }
 
 export async function fetchTafseerFromApi(
   surah: number, edition: string
 ): Promise<TafseerAyah[]> {
-  const res = await fetch(`${getApiBase()}/tafseer/${surah}/${edition}`);
-  if (!res.ok) throw new Error(`Tafseer fetch failed: ${res.status}`);
-  const data = await res.json();
-  return data.ayahs ?? [];
+  const cacheKey = `tafseer/${surah}/${edition}`;
+  try {
+    const res = await fetch(`${getApiBase()}/tafseer/${surah}/${edition}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) throw new Error(`Tafseer fetch failed: ${res.status}`);
+    const data = await res.json();
+    const ayahs: TafseerAyah[] = data.ayahs ?? [];
+    markNetworkSuccess();
+    if (ayahs.length > 0) void setCache(cacheKey, ayahs, TTL.tafseer);
+    return ayahs;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<TafseerAyah[]>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 }
 
 export async function fetchTasreef(verb: string): Promise<TasreefResult> {
@@ -140,8 +187,12 @@ export async function fetchTasreef(verb: string): Promise<TasreefResult> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ verb: verb.trim() }),
+    signal: AbortSignal.timeout(30000),
   });
-  if (!res.ok) throw new Error(`Tasreef failed: ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error ?? `Tasreef failed: ${res.status}`);
+  }
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;

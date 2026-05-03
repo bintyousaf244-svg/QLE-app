@@ -1,54 +1,93 @@
 import type { AyahData, SearchResult, SurahMeta, WordAnalysis } from "@/types";
+import { getCache, setCache, TTL } from "./offlineCache";
+import { markNetworkError, markNetworkSuccess } from "@/hooks/useNetworkStatus";
 
 const QURAN_API = "https://api.alquran.cloud/v1";
 const QURANCOM_API = "https://api.quran.com/api/v4";
 
 export const fetchSurahs = async (): Promise<SurahMeta[]> => {
-  const res = await fetch(`${QURAN_API}/surah`);
-  if (!res.ok) throw new Error("Failed to fetch surahs");
-  const data = await res.json();
-  return data.data;
+  const cacheKey = "surahs";
+  try {
+    const res = await fetch(`${QURAN_API}/surah`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error("Failed to fetch surahs");
+    const data = await res.json();
+    const surahs: SurahMeta[] = data.data;
+    markNetworkSuccess();
+    void setCache(cacheKey, surahs, TTL.surahList);
+    return surahs;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<SurahMeta[]>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 };
 
 export const fetchSurah = async (
   number: number
 ): Promise<{ surahMeta: SurahMeta; ayahs: AyahData[] }> => {
-  const res = await fetch(
-    `${QURAN_API}/surah/${number}/editions/quran-uthmani,en.asad,ur.jalandhry`
-  );
-  if (!res.ok) throw new Error(`Failed to fetch surah ${number}`);
-  const data = await res.json();
+  const cacheKey = `surah/${number}`;
+  try {
+    const res = await fetch(
+      `${QURAN_API}/surah/${number}/editions/quran-uthmani,en.asad,ur.jalandhry`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) throw new Error(`Failed to fetch surah ${number}`);
+    const data = await res.json();
 
-  const arabicData = data.data[0];
-  const englishData = data.data[1];
-  const urduData = data.data[2];
+    const arabicData = data.data[0];
+    const englishData = data.data[1];
+    const urduData = data.data[2];
 
-  const ayahs: AyahData[] = arabicData.ayahs.map((ayah: any, index: number) => ({
-    number: ayah.number,
-    numberInSurah: ayah.numberInSurah,
-    arabic: ayah.text,
-    english: englishData?.ayahs[index]?.text ?? "",
-    urdu: urduData?.ayahs[index]?.text ?? "",
-    juz: ayah.juz,
-    page: ayah.page,
-    sajda: typeof ayah.sajda === "object" ? (ayah.sajda?.recommended ?? false) : (ayah.sajda ?? false),
-  }));
+    const ayahs: AyahData[] = arabicData.ayahs.map((ayah: any, index: number) => ({
+      number: ayah.number,
+      numberInSurah: ayah.numberInSurah,
+      arabic: ayah.text,
+      english: englishData?.ayahs[index]?.text ?? "",
+      urdu: urduData?.ayahs[index]?.text ?? "",
+      juz: ayah.juz,
+      page: ayah.page,
+      sajda: typeof ayah.sajda === "object" ? (ayah.sajda?.recommended ?? false) : (ayah.sajda ?? false),
+    }));
 
-  return { surahMeta: arabicData, ayahs };
+    const result = { surahMeta: arabicData, ayahs };
+    markNetworkSuccess();
+    void setCache(cacheKey, result, TTL.surah);
+    return result;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<{ surahMeta: SurahMeta; ayahs: AyahData[] }>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 };
 
 export const fetchWordAnalysis = async (
   surah: number,
   ayah: number
 ): Promise<WordAnalysis[]> => {
-  const res = await fetch(
-    `${QURANCOM_API}/verses/by_key/${surah}:${ayah}?words=true&word_fields=text_uthmani,transliteration,translation&language=en`
-  );
-  if (!res.ok) throw new Error("Failed to fetch word analysis");
-  const data = await res.json();
-  return (data.verse?.words ?? []).filter(
-    (w: WordAnalysis) => w.char_type_name === "word"
-  );
+  const cacheKey = `wordAnalysis/${surah}/${ayah}`;
+  try {
+    const res = await fetch(
+      `${QURANCOM_API}/verses/by_key/${surah}:${ayah}?words=true&word_fields=text_uthmani,transliteration,translation&language=en`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) throw new Error("Failed to fetch word analysis");
+    const data = await res.json();
+    const words = (data.verse?.words ?? []).filter(
+      (w: WordAnalysis) => w.char_type_name === "word"
+    );
+    markNetworkSuccess();
+    void setCache(cacheKey, words, TTL.wordAnalysis);
+    return words;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<WordAnalysis[]>(cacheKey);
+    if (cached) return cached;
+    throw err;
+  }
 };
 
 export const searchQuran = async (keyword: string): Promise<SearchResult[]> => {
@@ -66,13 +105,19 @@ export const searchQuran = async (keyword: string): Promise<SearchResult[]> => {
 };
 
 export const fetchTafseer = async (surah: number, ayah: number): Promise<string> => {
+  const cacheKey = `tafseer/maududi/${surah}/${ayah}`;
   try {
-    const res = await fetch(`${QURAN_API}/ayah/${surah}:${ayah}/en.maududi`);
+    const res = await fetch(`${QURAN_API}/ayah/${surah}:${ayah}/en.maududi`, {
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return "";
     const data = await res.json();
-    return data.data?.text ?? "";
+    const text: string = data.data?.text ?? "";
+    if (text) void setCache(cacheKey, text, TTL.tafseer);
+    return text;
   } catch {
-    return "";
+    const cached = await getCache<string>(cacheKey);
+    return cached ?? "";
   }
 };
 

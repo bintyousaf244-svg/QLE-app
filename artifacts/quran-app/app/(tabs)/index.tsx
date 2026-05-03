@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { SurahCard } from "@/components/SurahCard";
 import { useColors } from "@/hooks/useColors";
 import { fetchSurahs } from "@/services/quranService";
@@ -119,6 +120,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <FlatList
         data={filtered}
         keyExtractor={(item: SurahMeta) => String(item.number)}
