@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "WLN_LetsU0JMvO-csfSYX"
+uri = "file://attached_assets/generated_images/quran_app_icon.png"
+type = "image"
+title = "generated_image"
