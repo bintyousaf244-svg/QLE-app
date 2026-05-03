@@ -20,6 +20,7 @@ import {
   fetchMorphology,
   fetchTafseerFromApi,
   type TafseerAyah,
+  type MorphWord,
 } from "@/services/apiService";
 import type { WordAnalysis } from "@/types";
 
@@ -143,9 +144,9 @@ export function AnalysisHub({ visible, surah, ayah, arabicText, surahName, onClo
     staleTime: Infinity,
   });
 
-  const morphologyQuery = useQuery({
+  const morphologyQuery = useQuery<MorphWord[]>({
     queryKey: ["morphology", surah, ayah],
-    queryFn: () => fetchMorphology(arabicText, surahName, ayah),
+    queryFn: () => fetchMorphology(surah, ayah),
     enabled: visible && activeTab === "morphology",
     staleTime: Infinity,
   });
@@ -212,23 +213,60 @@ export function AnalysisHub({ visible, surah, ayah, arabicText, surahName, onClo
   };
 
   const renderMorphologyTab = () => {
-    if (morphologyQuery.isLoading) return <LoadingState text="Analyzing morphology with AI..." />;
+    if (morphologyQuery.isLoading) return <LoadingState text="Loading morphological data..." />;
     if (morphologyQuery.isError) {
       return (
         <ErrorState
-          message="AI analysis unavailable. This feature requires an API key."
+          message="Could not load morphological data."
           onRetry={() => morphologyQuery.refetch()}
         />
       );
     }
-    if (!morphologyQuery.data) return <ErrorState message="No morphology data." />;
+    const words = morphologyQuery.data ?? [];
+    if (!words.length) return <ErrorState message="No morphological data for this verse." />;
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
         <View style={[styles.sourceBadge, { backgroundColor: colors.secondary }]}>
-          <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
-          <Text style={[styles.sourceLabel, { color: colors.primary }]}>AI Analysis · Classical Arabic Morphology</Text>
+          <Ionicons name="library-outline" size={12} color={colors.primary} />
+          <Text style={[styles.sourceLabel, { color: colors.primary }]}>Quranic Corpus · Word-by-Word Analysis</Text>
         </View>
-        <AnalysisText text={morphologyQuery.data} colors={colors} />
+        {words.map((w, i) => (
+          <View key={i} style={[styles.morphCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.morphHeader, { borderBottomColor: colors.border }]}>
+              <View style={[styles.morphNum, { backgroundColor: colors.primary }]}>
+                <Text style={styles.morphNumText}>{i + 1}</Text>
+              </View>
+              <Text style={[styles.morphArabic, { color: colors.accent }]}>{w.arabic}</Text>
+              <Text style={[styles.morphTranslit, { color: colors.mutedForeground }]}>{w.transliteration}</Text>
+            </View>
+            <View style={styles.morphBody}>
+              {w.definition ? (
+                <View style={styles.morphRow}>
+                  <Text style={[styles.morphLabel, { color: colors.mutedForeground }]}>Meaning</Text>
+                  <Text style={[styles.morphValue, { color: colors.foreground }]}>{w.definition}</Text>
+                </View>
+              ) : null}
+              {w.type ? (
+                <View style={styles.morphRow}>
+                  <Text style={[styles.morphLabel, { color: colors.mutedForeground }]}>Type</Text>
+                  <Text style={[styles.morphValue, { color: colors.foreground }]}>{w.type}</Text>
+                </View>
+              ) : null}
+              {w.root && w.root !== '—' ? (
+                <View style={styles.morphRow}>
+                  <Text style={[styles.morphLabel, { color: colors.mutedForeground }]}>Root</Text>
+                  <Text style={[styles.morphValueAr, { color: colors.accent }]}>{w.root}</Text>
+                </View>
+              ) : null}
+              {w.wazn ? (
+                <View style={styles.morphRow}>
+                  <Text style={[styles.morphLabel, { color: colors.mutedForeground }]}>Pattern</Text>
+                  <Text style={[styles.morphValueAr, { color: colors.foreground }]}>{w.wazn}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     );
   };
@@ -242,11 +280,16 @@ export function AnalysisHub({ visible, surah, ayah, arabicText, surahName, onClo
     if (tafseerEdition === "maududi" && maududiQuery.data) {
       tafseerText = maududiQuery.data as string;
     } else if (tafseerEdition === "kathir" && kathirQuery.data) {
-      const match = (kathirQuery.data as TafseerAyah[]).find((a) => a.numberInSurah === ayah);
-      tafseerText = match?.text ?? "";
+      const list = kathirQuery.data as TafseerAyah[];
+      const match = list.find((a) => a.numberInSurah === ayah);
+      // fall back to closest entry if exact verse not found
+      tafseerText = match?.text ?? list[0]?.text ?? "";
     } else if (tafseerEdition === "maarif" && maarifQuery.data) {
-      const match = (maarifQuery.data as TafseerAyah[]).find((a) => a.numberInSurah === ayah);
-      tafseerText = match?.text ?? "";
+      const list = maarifQuery.data as TafseerAyah[];
+      // Maarif groups commentary — find exact, else nearest preceding, else first
+      const exact = list.find((a) => a.numberInSurah === ayah);
+      const preceding = [...list].reverse().find((a) => a.numberInSurah <= ayah);
+      tafseerText = exact?.text ?? preceding?.text ?? list[0]?.text ?? "";
     }
 
     return (
@@ -387,4 +430,15 @@ const styles = StyleSheet.create({
   langText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   tafseerText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 26 },
   urduText: { textAlign: "right", writingDirection: "rtl", lineHeight: 30, fontSize: 16 },
+  morphCard: { borderRadius: 14, borderWidth: 1, marginBottom: 12, overflow: "hidden" },
+  morphHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1 },
+  morphNum: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  morphNumText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  morphArabic: { fontSize: 22, flex: 1, textAlign: "right" },
+  morphTranslit: { fontSize: 12, fontFamily: "Inter_400Regular", fontStyle: "italic" },
+  morphBody: { padding: 12, gap: 8 },
+  morphRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  morphLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", width: 60, paddingTop: 2 },
+  morphValue: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 20 },
+  morphValueAr: { fontSize: 16, flex: 1, textAlign: "right" },
 });

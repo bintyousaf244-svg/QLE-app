@@ -144,20 +144,35 @@ async function parseSSEResponse(res: Response): Promise<string> {
   return fullText || text;
 }
 
+export interface MorphWord {
+  arabic: string;
+  transliteration: string;
+  definition: string;
+  root: string;
+  wazn: string;
+  type: string;
+}
+
 export async function fetchMorphology(
-  ayahText: string, surahName: string, ayahNumber: number
-): Promise<string> {
-  const res = await fetch(`${getApiBase()}/analysis/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "morphology", ayahText, surahName, ayahNumber }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(err.error ?? `Morphology failed: ${res.status}`);
+  surah: number, ayah: number
+): Promise<MorphWord[]> {
+  const cacheKey = `morphology/${surah}/${ayah}`;
+  try {
+    const res = await fetch(`${getApiBase()}/morphology?surah=${surah}&ayah=${ayah}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) throw new Error(`Morphology fetch failed: ${res.status}`);
+    const data = await res.json();
+    const words: MorphWord[] = data.words ?? [];
+    markNetworkSuccess();
+    if (words.length > 0) void setCache(cacheKey, words, TTL.wordAnalysis);
+    return words;
+  } catch (err) {
+    markNetworkError();
+    const cached = await getCache<MorphWord[]>(cacheKey);
+    if (cached) return cached;
+    throw err;
   }
-  return parseSSEResponse(res);
 }
 
 export async function fetchTafseerFromApi(
