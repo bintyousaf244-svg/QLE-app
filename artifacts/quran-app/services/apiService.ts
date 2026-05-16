@@ -2,8 +2,11 @@ import { getCache, setCache, TTL } from "./offlineCache";
 import { markNetworkError, markNetworkSuccess } from "@/hooks/useNetworkStatus";
 
 const getApiBase = (): string => {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (apiUrl) return apiUrl;
+
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}/api` : "http://localhost:80/api";
+  return domain ? `https://${domain}/api` : "https://qle-app.onrender.com/api";
 };
 
 export interface GrammarResult {

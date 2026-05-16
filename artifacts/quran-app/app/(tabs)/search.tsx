@@ -138,8 +138,8 @@ export default function SearchScreen() {
   const [activeTasreef, setActiveTasreef] = useState("");
 
   const { data: results, isLoading, isFetching } = useQuery({
-    queryKey: ["search", activeQuery],
-    queryFn: () => searchQuran(activeQuery),
+    queryKey: ["search", activeQuery, mode],
+    queryFn: () => searchQuran(activeQuery, mode === "root"),
     enabled: activeQuery.trim().length > 1 && (mode === "keyword" || mode === "root"),
     staleTime: 60000,
   });

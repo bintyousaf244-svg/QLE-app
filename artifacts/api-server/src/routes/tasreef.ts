@@ -37,7 +37,7 @@ router.post('/tasreef', async (req, res) => {
     // Return helpful response listing available verbs
     const available = listVerbs().map(e => e.root).join(' · ');
     res.status(404).json({
-      error: `"${v}" is not in the offline dictionary. Available verbs: ${available}`,
+      error: `AI Conjugation is not configured. Available offline verbs: ${available}`,
       offlineOnly: true,
     });
     return;

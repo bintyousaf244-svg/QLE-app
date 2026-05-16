@@ -9,7 +9,7 @@ export const fetchSurahs = async (): Promise<SurahMeta[]> => {
   const cacheKey = "surahs";
   try {
     const res = await fetch(`${QURAN_API}/surah`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error("Failed to fetch surahs");
     const data = await res.json();
@@ -90,9 +90,14 @@ export const fetchWordAnalysis = async (
   }
 };
 
-export const searchQuran = async (keyword: string): Promise<SearchResult[]> => {
+export const searchQuran = async (keyword: string, isArabic = false): Promise<SearchResult[]> => {
   const encoded = encodeURIComponent(keyword);
-  const res = await fetch(`${QURAN_API}/search/${encoded}/all/en`);
+  const edition = isArabic ? "quran-uthmani" : "all/en";
+  const url = isArabic
+    ? `${QURAN_API}/search/${encoded}/all/quran-uthmani`
+    : `${QURAN_API}/search/${encoded}/all/en`;
+
+  const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
   const matches = data.data?.matches ?? [];
